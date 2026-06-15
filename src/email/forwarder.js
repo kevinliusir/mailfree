@@ -150,6 +150,35 @@ export function forwardByMailboxConfig(message, forwardTo, ctx, options = {}) {
 }
 
 /**
+ * 解码 MIME 编码词（RFC 2047），如 `=?utf-8?B?6aqM6K+B56CB?=` → `验证码`。
+ * 支持 B(base64) 与 Q(quoted-printable) 编码及任意字符集；解码失败时原样返回。
+ * @param {string} str - 原始头部值（可能含一个或多个编码词）
+ * @returns {string} 解码后的可读文本
+ */
+function decodeMimeHeader(str) {
+  if (!str) return '';
+  // 合并相邻编码词之间的空白（RFC 2047：编码词之间的空白应被忽略）
+  const s = String(str).replace(/\?=\s+=\?/g, '?==?');
+  return s.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (m, charset, enc, text) => {
+    try {
+      let bytes;
+      if (enc.toUpperCase() === 'B') {
+        const bin = atob(text);
+        bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+      } else {
+        const qp = text
+          .replace(/_/g, ' ')
+          .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+        bytes = Uint8Array.from(qp, c => c.charCodeAt(0));
+      }
+      return new TextDecoder(String(charset).toLowerCase()).decode(bytes);
+    } catch (_) {
+      return m; // 解码失败保留原文
+    }
+  });
+}
+
+/**
  * 解析 From 头，提取显示名与邮箱地址
  * @param {string} fromHeader - 原始 From 头，如 `张三 <a@b.com>`
  * @returns {{name: string, email: string}}
@@ -159,7 +188,7 @@ function parseSender(fromHeader) {
   const email = extractEmail(raw) || '';
   let name = '';
   const m = raw.match(/^\s*"?([^"<]*?)"?\s*</);
-  if (m && m[1]) name = m[1].trim();
+  if (m && m[1]) name = decodeMimeHeader(m[1].trim());
   return { name, email };
 }
 
@@ -179,8 +208,9 @@ async function resendForward(target, fromAddress, options) {
     ? `${name} (转发)`
     : (email ? `${email} (转发)` : '转发');
 
+  // 原始主题可能是 MIME 编码词（RFC 2047），先解码成可读文本
+  let fwdSubject = decodeMimeHeader(subject) || '(无主题)';
   // 主题加 [转发] 前缀（已有则不重复）
-  let fwdSubject = String(subject || '(无主题)');
   if (!/^\s*\[转发\]/.test(fwdSubject)) fwdSubject = `[转发] ${fwdSubject}`;
 
   const payload = {
