@@ -96,12 +96,26 @@ export default {
       const resolvedRecipientAddr = extractEmail(resolvedRecipient);
       const localPart = (resolvedRecipientAddr.split('@')[0] || '').toLowerCase();
 
-      // 处理邮件转发（优先使用邮箱配置，否则使用全局规则）
+      // 查询该邮箱的转发目标（优先邮箱配置，其次全局规则）
       const mailboxForwardTo = await getForwardTarget(DB, resolvedRecipientAddr);
-      if (mailboxForwardTo) {
-        forwardByMailboxConfig(message, mailboxForwardTo, ctx);
-      } else {
-        forwardByLocalPart(message, localPart, ctx, env);
+
+      // 判断转发走 Resend 重发还是 Cloudflare 原生：
+      // - 配置了 RESEND_API_KEY 且有可用发件地址 → 走 Resend（目标无需验证），
+      //   需要解析后的正文，放到下面解析完成后再执行；
+      // - 否则走 Cloudflare 原生 message.forward()，它必须在读取 message.raw
+      //   之前触发（原始流一次性，消费后再 forward 可能失败）。
+      const RESEND_API_KEY = env.RESEND_API_KEY || env.RESEND_TOKEN || env.RESEND || '';
+      // 默认用收件的 freemail 地址作发件人（须在 Resend 已验证的域名下）；
+      // 可用 FORWARD_FROM 覆盖为某个固定的已验证发件地址
+      const forwardFromAddress = (env.FORWARD_FROM || resolvedRecipientAddr || '').trim();
+      const useResendForward = !!(mailboxForwardTo && RESEND_API_KEY && forwardFromAddress);
+
+      if (!useResendForward) {
+        if (mailboxForwardTo) {
+          forwardByMailboxConfig(message, mailboxForwardTo, ctx);
+        } else {
+          forwardByLocalPart(message, localPart, ctx, env);
+        }
       }
 
       // 读取原始邮件内容
@@ -119,6 +133,18 @@ export default {
       } catch (_) {
         textContent = '';
         htmlContent = '';
+      }
+
+      // Resend 重发转发（需要上面解析出的完整正文）：目标邮箱无需在 Cloudflare 验证
+      if (useResendForward) {
+        forwardByMailboxConfig(message, mailboxForwardTo, ctx, {
+          resendApiKey: RESEND_API_KEY,
+          fromAddress: forwardFromAddress,
+          originalSender: fromHeader,
+          subject,
+          html: htmlContent,
+          text: textContent
+        });
       }
 
       const mailbox = extractEmail(resolvedRecipient || toHeader);
