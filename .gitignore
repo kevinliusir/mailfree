@@ -94,6 +94,15 @@ temp/
 ehthumbs.db
 Thumbs.db
 
+# Database backups (含 password_hash 与邮件内容，切勿提交)
+backup/
+*.sql
+
+# 私密运维文档（含基础设施 ID/版本号/内部流程，勿提交）
+docs/运维操作手册-2026-06.md
+docs/域名子域添加转发步骤.md
+docs/添加新域名邮箱详细步骤.md
+
 # Cloudflare
 .dev.vars
 /asset/bookmarks_2025_9_5_2.html
