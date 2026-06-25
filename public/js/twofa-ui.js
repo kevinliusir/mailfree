@@ -5,6 +5,16 @@
   const toast = (m, t) => { if (typeof showToast === 'function') showToast(m, t || 'info'); };
   function el(tag, attrs, html) { const e = document.createElement(tag); if (attrs) Object.assign(e, attrs); if (html != null) e.innerHTML = html; return e; }
   function btnStyle(bg, color, border) { return `flex:1;padding:12px;border:${border};border-radius:6px;background:${bg};color:${color};font-size:15px;font-weight:600;cursor:pointer`; }
+  // 复制到剪贴板：优先 Clipboard API，非安全上下文（http）回退 execCommand
+  async function copyText(text) {
+    try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (_) {}
+    try {
+      const ta = el('textarea'); ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch (_) { return false; }
+  }
 
   let overlay;
   function close() { if (overlay) { overlay.remove(); overlay = null; } }
@@ -32,8 +42,15 @@
     box.appendChild(el('p', { style: 'color:#71717a;font-size:13px;margin:0 0 16px' }, '用认证器 App（如 Google Authenticator）扫码或手动输入密钥，再输入 6 位码确认。'));
     const qrBox = el('div', { style: 'text-align:center;min-height:140px' }, '二维码生成中…');
     box.appendChild(qrBox);
-    const secretBox = el('div', { style: 'font-family:monospace;font-size:13px;word-break:break-all;background:#fafafa;border:1px solid #e4e4e7;border-radius:6px;padding:8px;margin:12px 0' });
+    const secretBox = el('div', { style: 'display:flex;align-items:center;gap:8px;background:#fafafa;border:1px solid #e4e4e7;border-radius:6px;padding:8px;margin:12px 0' });
+    const secretText = el('span', { style: 'flex:1;font-family:monospace;font-size:13px;word-break:break-all' });
+    const copyBtn = el('button', { type: 'button', title: '复制密钥', style: 'display:none;flex:none;padding:4px 10px;border:1px solid #e4e4e7;border-radius:6px;background:#fff;color:#18181b;font-size:12px;cursor:pointer;white-space:nowrap' }, '复制');
+    secretBox.appendChild(secretText); secretBox.appendChild(copyBtn);
     box.appendChild(secretBox);
+    copyBtn.onclick = async () => {
+      const ok = await copyText(secret);
+      toast(ok ? '密钥已复制' : '复制失败，请手动复制', ok ? 'success' : 'warn');
+    };
     const input = el('input', { type: 'text', placeholder: '6 位验证码', maxLength: 6, inputMode: 'numeric' });
     input.style.cssText = 'width:100%;padding:12px;border:1px solid #e4e4e7;border-radius:6px;font-size:16px;margin-bottom:12px;box-sizing:border-box';
     box.appendChild(input);
@@ -48,7 +65,8 @@
     try {
       const r = await api('/api/2fa/setup', { method: 'POST', body: '{}' }).then(x => x.json());
       secret = r.secret;
-      secretBox.textContent = '密钥：' + secret;
+      secretText.textContent = '密钥：' + secret;
+      copyBtn.style.display = '';
       try { const qr = qrcode(0, 'M'); qr.addData(r.otpauthUri); qr.make(); qrBox.innerHTML = qr.createImgTag(4, 8); }
       catch (_) { qrBox.textContent = '（二维码渲染失败，请用上方密钥手动添加）'; }
     } catch (_) { qrBox.textContent = '初始化失败，请重试'; }
