@@ -3,8 +3,6 @@
  * @module modules/admin/api
  */
 
-import { mockApi } from '../app/mock-api.js';
-
 /**
  * API 请求封装
  * @param {string} path - API 路径
@@ -12,11 +10,6 @@ import { mockApi } from '../app/mock-api.js';
  * @returns {Promise<Response>}
  */
 export async function api(path, options = {}) {
-  // Guest 模式使用 mock API
-  if (window.__GUEST_MODE__) {
-    return mockApi(path, options);
-  }
-  
   const r = await fetch(path, {
     ...options,
     headers: { 'Cache-Control': 'no-cache', ...options.headers }

@@ -3,15 +3,10 @@
  * @module mailbox-settings
  */
 
-import { mockApi } from './modules/app/mock-api.js';
-
 /**
- * 内部 API 请求封装（支持 guest 模式）
+ * 内部 API 请求封装
  */
 async function apiRequest(path, options = {}) {
-  if (window.__GUEST_MODE__) {
-    return mockApi(path, options);
-  }
   return fetch(path, options);
 }
 
@@ -329,7 +324,6 @@ export function injectDialogStyles() {
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      backdrop-filter: blur(4px);
     }
     .modal-content {
       background: var(--bg-primary, #fff);

@@ -7,6 +7,8 @@ import { handleUsersApi } from './users.js';
 import { handleMailboxesApi } from './mailboxes.js';
 import { handleEmailsApi } from './emails.js';
 import { handleSendApi } from './send.js';
+import { handleTwoFaApi } from './twofa.js';
+import { handleAccountApi } from './account.js';
 import { getJwtPayload, errorResponse } from './helpers.js';
 
 /**
@@ -27,7 +29,6 @@ export async function handleApiRequest(request, db, mailDomains, options = {
 }) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const isMock = !!options.mockOnly;
   const isMailboxOnly = !!options.mailboxOnly;
 
   // 邮箱用户只能访问特定的API端点和自己的数据
@@ -37,7 +38,7 @@ export async function handleApiRequest(request, db, mailDomains, options = {
     const mailboxId = payload?.mailboxId;
     
     // 允许的API端点
-    const allowedPaths = ['/api/emails', '/api/email/', '/api/auth', '/api/quota', '/api/mailbox/password'];
+    const allowedPaths = ['/api/emails', '/api/email/', '/api/auth', '/api/quota', '/api/mailbox/info', '/api/mailbox/password', '/api/2fa'];
     const isAllowedPath = allowedPaths.some(allowedPath => path.startsWith(allowedPath));
     
     if (!isAllowedPath) {
@@ -77,6 +78,14 @@ export async function handleApiRequest(request, db, mailDomains, options = {
 
   // 依次尝试各个 API 处理器
   let response;
+
+  // 2FA 管理 API（最先匹配 /api/2fa）
+  response = await handleTwoFaApi(request, db, url, path, options);
+  if (response) return response;
+
+  // 账号自助 API（修改自己密码）
+  response = await handleAccountApi(request, db, url, path, options);
+  if (response) return response;
 
   // 用户管理 API
   response = await handleUsersApi(request, db, url, path, options);

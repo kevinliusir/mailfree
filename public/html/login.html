@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>登录 - 临时邮箱</title>
+    <title>登录 - Mailman</title>
     <style>.precheck-hide body{ visibility: hidden; }</style>
     <script>
       // 立即检查登录状态（在任何其他脚本之前）
@@ -98,29 +98,59 @@
       })();
     </script>
     
-    <script src="/js/mock.js"></script>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml" />
+
+    <!-- Google Fonts -->
+
     <link rel="stylesheet" href="/css/login.css" />
+    <!-- 暗黑模式样式 -->
+    <!-- 主题切换支持 -->
+    <script src="/js/theme-toggle.js"></script>
   </head>
   <body>
     <div class="bg"></div>
     <div class="center">
+      <!-- 主题切换按钮 -->
+      <button id="theme-toggle" class="theme-toggle-login" aria-label="切换主题" title="切换主题">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <use href="/icons/sprites.svg#icon-moon"/>
+        </svg>
+      </button>
       <div class="card">
-        <div class="logo">🔐</div>
-        <h1>登录到临时邮箱</h1>
-        <div id="err" class="err"></div>
-        <input id="username" class="input" type="text" placeholder="用户名/邮箱" />
-        <input id="pwd" class="input" type="password" placeholder="密码" />
-        <div style="font-size:12px;color:#64748b;margin-bottom:8px">
-          账号：guest，密码： admin，将进入观看模式。
+        <div class="logo">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L7.5 13.5m0 0l3 3L6 17l-1.5-3.5"/>
+          </svg>
         </div>
+        <h1>登录到邮箱</h1>
+        <div id="err" class="err"></div>
+        <input id="username" class="input" type="text" placeholder="用户名/邮箱" aria-label="用户名或邮箱地址" />
+        <input id="pwd" class="input" type="password" placeholder="密码" aria-label="密码" />
         <button id="login" class="btn">登录</button>
       </div>
     </div>
     <div id="toast" class="toast"></div>
     <script src="/js/toast-utils.js"></script>
     <script src="/js/login.js"></script>
+    <script>
+      // 绑定登录页主题切换按钮
+      (function() {
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        // 同步初始图标状态
+        if (window.freemailTheme) {
+          var t = window.freemailTheme.getTheme();
+          var icon = btn.querySelector('svg use');
+          if (icon) icon.setAttribute('href', '/icons/sprites.svg#icon-' + (t === 'dark' ? 'sun' : 'moon'));
+          btn.title = t === 'dark' ? '切换到明亮模式' : '切换到暗黑模式';
+        }
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (window.freemailTheme) window.freemailTheme.toggle();
+        });
+      })();
+    </script>
   </body>
   </html>
 

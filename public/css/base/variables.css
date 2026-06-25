@@ -4,15 +4,10 @@
 
 :root {
   /* ===== 增强背景系统 ===== */
-  --surface: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 25%, #f8fafc 50%, #fff1f2 75%, #fef3e8 100%);
-  --surface-overlay: linear-gradient(135deg, rgba(248, 250, 252, 0.85) 0%, rgba(241, 245, 249, 0.92) 100%);
-  --surface-pattern: radial-gradient(circle at 25% 25%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
-  --surface-mesh: 
-    radial-gradient(at 40% 20%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, rgba(236, 72, 153, 0.06) 0px, transparent 50%),
-    radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
-    radial-gradient(at 80% 50%, rgba(245, 158, 11, 0.05) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%);
+  --surface: #fafafa;
+  --surface-overlay: none;
+  --surface-pattern: none;
+  --surface-mesh: none;
   
   /* ===== 增强卡片系统 ===== */
   --card: rgba(255, 255, 255, 0.88);
@@ -20,29 +15,29 @@
   --card-glass: rgba(255, 255, 255, 0.65);
   --card-glass-hover: rgba(255, 255, 255, 0.85);
   --card-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.95) 100%);
-  --card-gradient-accent: linear-gradient(135deg, rgba(99, 102, 241, 0.03) 0%, rgba(236, 72, 153, 0.02) 100%);
+  --card-gradient-accent: linear-gradient(135deg, rgba(37, 99, 235, 0.03) 0%, rgba(37, 99, 235, 0.02) 100%);
   
   /* ===== 主色系 ===== */
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-active: #4338ca;
-  --primary-light: rgba(99, 102, 241, 0.12);
-  --primary-glass: rgba(99, 102, 241, 0.06);
-  --primary-rgb: 99, 102, 241;
-  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  --primary-gradient-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-active: #1e40af;
+  --primary-light: rgba(37, 99, 235, 0.12);
+  --primary-glass: rgba(37, 99, 235, 0.06);
+  --primary-rgb: 37, 99, 235;
+  --primary-gradient: linear-gradient(135deg, #2563eb 0%, #2563eb 50%, #3b82f6 100%);
+  --primary-gradient-soft: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
   
   /* ===== 次要色系 ===== */
-  --secondary: #8b5cf6;
-  --secondary-hover: #7c3aed;
-  --secondary-light: rgba(139, 92, 246, 0.12);
-  --secondary-gradient: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  --secondary: #2563eb;
+  --secondary-hover: #1d4ed8;
+  --secondary-light: rgba(37, 99, 235, 0.12);
+  --secondary-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   
   /* ===== 强调色系 ===== */
-  --accent: #ec4899;
-  --accent-hover: #db2777;
-  --accent-light: rgba(236, 72, 153, 0.12);
-  --accent-gradient: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-light: rgba(37, 99, 235, 0.12);
+  --accent-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   
   /* ===== 状态颜色 ===== */
   --success: #10b981;
@@ -77,7 +72,7 @@
   /* ===== 边框系统 ===== */
   --border: #e2e8f0;
   --border-light: #f1f5f9;
-  --border-focus: #6366f1;
+  --border-focus: #2563eb;
   --border-glass: rgba(255, 255, 255, 0.3);
   --border-glass-hover: rgba(255, 255, 255, 0.5);
   
@@ -87,7 +82,7 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
-  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.2);
+  --shadow-glow: 0 0 24px rgba(37, 99, 235, 0.2);
   --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
   --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
   
@@ -122,19 +117,4 @@
   --z-modal: 1000;
   --z-toast: 2000;
   --z-tooltip: 3000;
-}
-
-/* ===== 暗色模式变量 ===== */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-    --card: rgba(30, 41, 59, 0.9);
-    --card-hover: rgba(30, 41, 59, 0.95);
-    --card-glass: rgba(30, 41, 59, 0.7);
-    --text: #f8fafc;
-    --text-light: #e2e8f0;
-    --text-muted: #94a3b8;
-    --border: #334155;
-    --border-light: #1e293b;
-  }
 }

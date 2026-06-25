@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>临时邮箱</title>
+    <title>Mailman</title>
     <!-- 运行时注入域名列表（从 env.MAIL_DOMAIN 解析），用于前端域名选择 -->
     <meta name="mail-domains" content="">
     <link rel="preload" href="/html/app.html" as="fetch" crossorigin>
@@ -12,10 +12,25 @@
     <meta http-equiv="Expires" content="0" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="shortcut icon" href="favicon.svg" type="image/svg+xml" />
+
+
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/app-sidebar.css" />
+    <link rel="stylesheet" href="/css/app-mailbox.css" />
+    <link rel="stylesheet" href="/css/app-compose.css" />
+    <link rel="stylesheet" href="/css/app-modal.css" />
+    <link rel="stylesheet" href="/css/app-responsive.css" />
     <link rel="stylesheet" href="/css/app-mobile.css" media="(max-width: 900px)" />
+    <!-- 暗黑模式样式 -->
+    <!-- 主题切换支持 -->
+    <script src="/js/theme-toggle.js"></script>
+
+    <!-- SVG Icons Sprite (Replace Emoji Icons) -->
+    <link rel="preload" href="/icons/sprites.svg" as="image" type="image/svg+xml" crossorigin>
     <script src="/js/toast-utils.js"></script>
-    <script src="/js/mock.js"></script>
+    <script src="/js/vendor/qrcode.js"></script>
+    <script src="/js/twofa-ui.js" defer></script>
+    <script src="/js/account-ui.js" defer></script>
     <!-- 提前内联保存 hash，保证最早阶段即可保留路由信息 -->
     <script>
       try{ if (location.hash){ sessionStorage.setItem('mf:preservedHash', location.hash); } }catch(_){ }
@@ -24,6 +39,11 @@
     <script src="/js/app-router.js" defer></script>
   </head>
   <body>
+    <!-- SVG Icon Sprites -->
+    <svg style="display:none">
+      <use href="/icons/sprites.svg#icon-mail"/>
+    </svg>
+
     <div id="app"></div>
     <script>
       // 改进的路由守卫逻辑：优先使用 loading 页面进行权限检查，避免登录页闪屏
@@ -95,7 +115,7 @@
             }catch(_){ }
             // 显示 loading 界面，同时进行权限检查
             var loadingDiv = document.createElement('div');
-            loadingDiv.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f8fafc;z-index:9999"><div style="text-align:center"><div style="font-size:3rem;margin-bottom:1rem">📧</div><div style="width:40px;height:40px;border:3px solid rgba(59,130,246,0.2);border-top:3px solid #3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>';
+            loadingDiv.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fafafa;z-index:9999"><div style="text-align:center"><div style="width:60px;height:60px;margin:0 auto 16px;background:#2563eb;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(37, 99, 235,0.3)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div><div style="width:40px;height:40px;border:3px solid rgba(37, 99, 235,0.2);border-top:3px solid #2563eb;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div></div>';
             document.body.appendChild(loadingDiv);
             
             // 并行进行权限检查

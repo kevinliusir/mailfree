@@ -9,7 +9,6 @@ const state = {
   user: {
     role: null,
     username: null,
-    isGuest: false,
     isAdmin: false,
     isStrictAdmin: false
   },
@@ -166,7 +165,7 @@ function notifyListeners(path, newValue, oldValue) {
  * 重置状态
  */
 export function resetState() {
-  state.user = { role: null, username: null, isGuest: false, isAdmin: false, isStrictAdmin: false };
+  state.user = { role: null, username: null, isAdmin: false, isStrictAdmin: false };
   state.domains = [];
   state.currentMailbox = null;
   state.mailboxes = [];
@@ -186,7 +185,6 @@ export function initUserState(sessionData) {
   setState('user', {
     role: sessionData.role || null,
     username: sessionData.username || null,
-    isGuest: sessionData.role === 'guest',
     isAdmin: sessionData.role === 'admin',
     isStrictAdmin: sessionData.strictAdmin === true
   });

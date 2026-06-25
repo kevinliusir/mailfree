@@ -1,28 +1,26 @@
 /**
- * Freemail 主应用入口
+ * Mailman 主应用入口
  * @module app
  */
 
 import { cacheGet, cacheSet, setCurrentUserKey, getCurrentUserKey } from './storage.js';
 import { openForwardDialog, toggleFavorite, injectDialogStyles } from './mailbox-settings.js';
+import IconHelper from './modules/icons.js';
 
 // 导入模块
 import { formatTs, formatTsMobile, extractCode, escapeHtml, escapeAttr } from './modules/app/ui-helpers.js';
-import { mockApi, MOCK_STATE } from './modules/app/mock-api.js';
 import { showConfirm } from './modules/app/confirm-dialog.js';
 import { startAutoRefresh, stopAutoRefresh, initVisibilityTracking } from './modules/app/auto-refresh.js';
 import { getCurrentMailbox, setCurrentMailbox, loadCurrentMailbox, clearCurrentMailbox, setCurrentMailboxInfo, getCurrentMailboxInfo } from './modules/app/mailbox-state.js';
 import { renderPager, sliceByPage, prevPage, nextPage, resetPager, setView, isSentViewActive, renderEmailItem, markViewLoaded, isFirstLoad } from './modules/app/email-list.js';
 import { renderMailboxList, renderMbPager, getCurrentPage, setCurrentPage, getPageSize, prevMbPage, nextMbPage, resetMbPage, setSearchTerm, getSearchTerm, setLoading, isLoadingMailboxes, setLastCount, getLastCount } from './modules/app/mailbox-list.js';
-import { initSessionFromCache, validateSession, isGuest, isAdmin, applySessionUI, initGuestMode } from './modules/app/session.js';
+import { initSessionFromCache, validateSession, isAdmin, applySessionUI } from './modules/app/session.js';
 import { loadDomains, getStoredLength, saveLength, updateRangeProgress, getSelectedDomainIndex, populateDomains, STORAGE_KEYS } from './modules/app/domains.js';
 import { initCompose, showSentEmailDetail } from './modules/app/compose.js';
 import { showEmailDetail, deleteEmailById, deleteSentById, copyFromEmailList, prefetchEmails } from './modules/app/email-viewer.js';
 import { generateMailbox, generateNameMailbox, createCustomMailbox, updateEmailDisplay, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails, logout } from './modules/app/mailbox-actions.js';
 
 // 全局状态
-window.__GUEST_MODE__ = false;
-window.__MOCK_STATE__ = MOCK_STATE;
 try { if (sessionStorage.getItem('mf:just_logged_in') === '1') sessionStorage.removeItem('mf:just_logged_in'); } catch(_) {}
 
 // 注入弹窗样式
@@ -30,7 +28,6 @@ injectDialogStyles();
 
 // API 请求封装
 async function api(path, options) {
-  if (window.__GUEST_MODE__) return mockApi(path, options);
   const res = await fetch(path, options);
   if (res.status === 401) {
     if (location.pathname !== '/html/login.html') location.replace('/html/login.html');
@@ -95,7 +92,16 @@ async function refresh() {
     const ctrl = new AbortController(); const timeout = setTimeout(() => ctrl.abort(), 8000);
     let emails = [];
     try { const r = await api(url, { signal: ctrl.signal }); emails = await r.json(); } finally { clearTimeout(timeout); }
-    if (!Array.isArray(emails) || !emails.length) { els.list.innerHTML = '<div style="text-align:center;color:#64748b">📭 暂无邮件</div>'; if (els.pager) els.pager.style.display = 'none'; return; }
+    if (!Array.isArray(emails) || !emails.length) {
+      els.list.innerHTML = `<div class="empty-state">
+        <svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <use href="/icons/sprites.svg#icon-inbox"/>
+        </svg>
+        <span class="empty-text">暂无邮件</span>
+      </div>`;
+      if (els.pager) els.pager.style.display = 'none';
+      return;
+    }
     const isMobile = window.matchMedia?.('(max-width: 900px)').matches;
     els.list.innerHTML = sliceByPage(emails, els).map(e => renderEmailItem(e, isMobile)).join('');
     if (!isSentViewActive()) prefetchEmails(emails, api);
@@ -122,7 +128,13 @@ async function loadMailboxes(opts = {}) {
   finally { setLoading(false); if (els.mbLoading) els.mbLoading.style.display = 'none'; }
 }
 
-function updateMailboxInfoUI(info) { if (!info) return; if (els.favoriteIcon && els.favoriteText) { els.favoriteIcon.textContent = info.is_favorite ? '⭐' : '☆'; els.favoriteText.textContent = info.is_favorite ? '已收藏' : '收藏'; }}
+function updateMailboxInfoUI(info) {
+  if (!info) return;
+  if (els.favoriteIcon && els.favoriteText) {
+    els.favoriteIcon.innerHTML = IconHelper.star(18, 18, info.is_favorite);
+    els.favoriteText.textContent = info.is_favorite ? '已收藏' : '收藏邮箱';
+  }
+}
 
 // 全局函数
 window.selectMailbox = (addr) => selectMailboxAddress(addr, els, api, refresh, autoRefreshCallback, updateMailboxInfoUI);
@@ -198,8 +210,7 @@ initCompose(els, api, showToast);
 (async () => {
   const s = await validateSession();
   if (!s) { clearCurrentMailbox(); stopAutoRefresh(); location.replace('/html/login.html'); return; }
-  if (s.role === 'guest') { initGuestMode(); if (domainSelect) { domainSelect.innerHTML = '<option value="0">example.com</option>'; domainSelect.disabled = true; } populateDomains(['example.com'], domainSelect); }
-  else await loadDomains(domainSelect, api);
+  await loadDomains(domainSelect, api);
   try { const qr = await api('/api/user/quota'); const q = await qr.json(); const el = document.getElementById('quota'); if (el && q) { el.textContent = isAdmin() ? `${q.total || 0} 邮箱` : `${q.used || 0} / ${q.limit || 0}`; }} catch(_) {}
   await loadMailboxes();
   

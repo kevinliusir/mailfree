@@ -169,7 +169,7 @@ export function updateEmailDisplay(elements, address) {
   else if (email) email.textContent = address;
   
   email?.classList.add('has-email');
-  if (emailActions) emailActions.style.display = 'flex';
+  if (emailActions) emailActions.style.display = 'grid';
   if (listCard) listCard.style.display = 'block';
 }
 
@@ -188,7 +188,7 @@ export async function selectMailboxAddress(address, elements, api, refresh, auto
   
   // 更新侧边栏选中状态
   document.querySelectorAll('.mailbox-item').forEach(el => {
-    el.classList.toggle('active', el.querySelector('.address')?.textContent === address);
+    el.classList.toggle('selected', el.querySelector('.address')?.textContent === address);
   });
   
   // 加载邮箱信息

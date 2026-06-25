@@ -11,16 +11,24 @@ export {
   checkMailboxOwnership,
   toggleMailboxPin,
   getTotalMailboxCount,
-  getForwardTarget
+  getForwardTarget,
+  getMailboxTotp,
+  setMailboxTotp,
+  clearMailboxTotp
 } from './mailboxes.js';
 export {
   createUser,
   updateUser,
   deleteUser,
   listUsersWithCounts,
+  getUserStats,
   assignMailboxToUser,
   getUserMailboxes,
-  unassignMailboxFromUser
+  unassignMailboxFromUser,
+  getUserTotp,
+  getUserTotpByUsername,
+  setUserTotp,
+  clearUserTotp
 } from './users.js';
 export {
   recordSentEmail,

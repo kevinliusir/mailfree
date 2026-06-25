@@ -57,6 +57,7 @@ export function renderUserRow(user) {
       <td class="col-actions">
         <div class="user-actions">
           <button class="btn btn-sm btn-edit" data-action="edit" data-user-id="${id}" title="编辑">✏️</button>
+          <button class="btn btn-sm" data-action="reset-2fa" data-user-id="${id}" title="重置两步验证">🔑</button>
         </div>
       </td>
     </tr>

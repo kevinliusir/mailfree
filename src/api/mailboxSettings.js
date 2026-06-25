@@ -13,13 +13,13 @@ import { isValidEmail } from '../utils/common.js';
  * @returns {Promise<boolean>} 是否有权限
  */
 async function canUserAccessMailbox(db, user, mailboxId) {
-  // strictAdmin 和 admin 有全部权限
-  if (user.role === 'strictAdmin' || user.role === 'admin') {
+  // 只有严格管理员拥有全局权限。
+  if (user.role === 'strictAdmin') {
     return true;
   }
   
-  // 普通用户检查邮箱所有权
-  if (user.role === 'user' && user.id) {
+  // 普通用户和非严格 admin 都只能操作已绑定到自己的邮箱。
+  if ((user.role === 'user' || user.role === 'admin') && user.id) {
     const res = await db.prepare(
       'SELECT 1 FROM user_mailboxes WHERE user_id = ? AND mailbox_id = ? LIMIT 1'
     ).bind(user.id, mailboxId).all();
@@ -45,7 +45,7 @@ async function canUserAccessMailbox(db, user, mailboxId) {
 export async function handleSetForward(req, env) {
   try {
     const user = req.user;
-    if (!user || user.role === 'guest') {
+    if (!user) {
       return new Response(JSON.stringify({ error: '无权限' }), { status: 403 });
     }
     
@@ -105,7 +105,7 @@ export async function handleSetForward(req, env) {
 export async function handleToggleFavorite(req, env) {
   try {
     const user = req.user;
-    if (!user || user.role === 'guest') {
+    if (!user) {
       return new Response(JSON.stringify({ error: '无权限' }), { status: 403 });
     }
     

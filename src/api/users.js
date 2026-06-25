@@ -3,7 +3,7 @@
  * @module api/users
  */
 
-import { getJwtPayload, isStrictAdmin, sha256Hex, jsonResponse, errorResponse } from './helpers.js';
+import { getJwtPayload, isStrictAdmin, hashPassword, jsonResponse, errorResponse } from './helpers.js';
 import { initMockUsers, buildMockMailboxes, MOCK_DOMAINS } from './mock.js';
 import {
   listUsersWithCounts,
@@ -12,8 +12,29 @@ import {
   deleteUser,
   assignMailboxToUser,
   unassignMailboxFromUser,
-  getUserMailboxes
+  getUserMailboxes,
+  getTotalMailboxCount,
+  getUserStats
 } from '../db/index.js';
+
+/**
+ * 解析分页参数，统一支持 page/size 与 limit/offset 两种风格
+ * 非数字输入会回退到默认值，避免产生 NaN
+ * @param {URL} url - 请求 URL
+ * @returns {{limit: number, offset: number}} 规范化后的 limit 与 offset
+ */
+function parsePagination(url) {
+  const pageParam = url.searchParams.get('page');
+  const sizeParam = url.searchParams.get('size');
+  if (pageParam !== null || sizeParam !== null) {
+    const page = Math.max(1, parseInt(pageParam, 10) || 1);
+    const size = Math.max(1, Math.min(100, parseInt(sizeParam, 10) || 50));
+    return { limit: size, offset: (page - 1) * size };
+  }
+  const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit'), 10) || 50), 100);
+  const offset = Math.max(0, parseInt(url.searchParams.get('offset'), 10) || 0);
+  return { limit, offset };
+}
 
 /**
  * 处理用户管理相关 API
@@ -34,8 +55,7 @@ export async function handleUsersApi(request, db, url, path, options) {
   
   // =================== 用户管理（演示模式） ===================
   if (isMock && path === '/api/users' && request.method === 'GET') {
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
-    const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0);
+    const { limit, offset } = parsePagination(url);
     const sort = url.searchParams.get('sort') || 'desc';
     
     let list = (globalThis.__MOCK_USERS__ || []).map(u => {
@@ -49,8 +69,19 @@ export async function handleUsersApi(request, db, url, path, options) {
       return sort === 'asc' ? dateA - dateB : dateB - dateA;
     });
     
+    // 与非演示模式保持一致的返回契约：全局聚合统计 + 当前页列表
+    const total = list.length;
+    const adminCount = list.filter(u => u.role === 'admin').length;
+    const activeCount = list.filter(u => u.can_send).length;
+    const totalMailboxes = list.reduce((sum, u) => sum + (u.mailbox_count || 0), 0);
     const result = list.slice(offset, offset + limit);
-    return Response.json(result);
+    return Response.json({
+      list: result,
+      total,
+      total_mailboxes: totalMailboxes,
+      admin_count: adminCount,
+      active_count: activeCount
+    });
   }
   
   if (isMock && path === '/api/users' && request.method === 'POST') {
@@ -136,12 +167,23 @@ export async function handleUsersApi(request, db, url, path, options) {
   // ================= 用户管理接口（仅非演示模式） =================
   if (!isMock && path === '/api/users' && request.method === 'GET') {
     if (!isStrictAdmin(request, options)) return errorResponse('Forbidden', 403);
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100);
-    const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0);
+
+    const { limit, offset } = parsePagination(url);
     const sort = url.searchParams.get('sort') || 'desc';
     try {
-      const users = await listUsersWithCounts(db, { limit, offset, sort });
-      return Response.json(users);
+      const [stats, users, totalMailboxes] = await Promise.all([
+        getUserStats(db),
+        listUsersWithCounts(db, { limit, offset, sort }),
+        getTotalMailboxCount(db)
+      ]);
+      const userStats = stats || { total: 0, admin_count: 0, active_count: 0 };
+      return Response.json({
+        list: users,
+        total: userStats.total,
+        total_mailboxes: totalMailboxes,
+        admin_count: userStats.admin_count,
+        active_count: userStats.active_count
+      });
     } catch (e) { return errorResponse('查询失败', 500); }
   }
   
@@ -154,7 +196,7 @@ export async function handleUsersApi(request, db, url, path, options) {
       const mailboxLimit = Number(body.mailboxLimit || 10);
       const password = String(body.password || '').trim();
       let passwordHash = null;
-      if (password) { passwordHash = await sha256Hex(password); }
+      if (password) { passwordHash = await hashPassword(password); }
       const user = await createUser(db, { username, passwordHash, role, mailboxLimit });
       return Response.json(user);
     } catch (e) { return errorResponse('创建失败: ' + (e?.message || e), 500); }
@@ -170,7 +212,7 @@ export async function handleUsersApi(request, db, url, path, options) {
       if (typeof body.mailboxLimit !== 'undefined') fields.mailbox_limit = Math.max(0, Number(body.mailboxLimit));
       if (typeof body.role === 'string') fields.role = (body.role === 'admin' ? 'admin' : 'user');
       if (typeof body.can_send !== 'undefined') fields.can_send = body.can_send ? 1 : 0;
-      if (typeof body.password === 'string' && body.password) { fields.password_hash = await sha256Hex(String(body.password)); }
+      if (typeof body.password === 'string' && body.password) { fields.password_hash = await hashPassword(String(body.password)); }
       await updateUser(db, id, fields);
       return Response.json({ success: true });
     } catch (e) { return errorResponse('更新失败: ' + (e?.message || e), 500); }
@@ -211,6 +253,9 @@ export async function handleUsersApi(request, db, url, path, options) {
   if (!isMock && request.method === 'GET' && path.startsWith('/api/users/') && path.endsWith('/mailboxes')) {
     const id = Number(path.split('/')[3]);
     if (!id) return errorResponse('无效ID', 400);
+    const payload = getJwtPayload(request, options);
+    const self = Number(payload?.userId || 0) === id;
+    if (!isStrictAdmin(request, options) && !self) return errorResponse('Forbidden', 403);
     try { const list = await getUserMailboxes(db, id); return Response.json(list || []); }
     catch (e) { return errorResponse('查询失败', 500); }
   }

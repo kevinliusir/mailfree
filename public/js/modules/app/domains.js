@@ -4,7 +4,6 @@
  */
 
 import { cacheGet, cacheSet, readPrefetch } from '../../storage.js';
-import { isGuest } from './session.js';
 
 // 域名列表
 let domains = [];
@@ -59,11 +58,6 @@ export function populateDomains(domainList, selectElement) {
  * @param {Function} api - API 函数
  */
 export async function loadDomains(selectElement, api) {
-  if (isGuest()) {
-    populateDomains(['example.com'], selectElement);
-    return;
-  }
-  
   let domainSet = false;
   
   // 尝试从缓存加载

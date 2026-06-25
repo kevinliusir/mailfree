@@ -23,28 +23,36 @@ export async function showEmailDetail(id, elements, api, showToast) {
       email = await r.json();
       setEmailCache(id, email);
     }
-    
-    modalSubject.innerHTML = `<span class="modal-icon">📧</span><span>${escapeHtml(email.subject || '(无主题)')}</span>`;
-    
-    let contentHtml = '';
+
+    modalSubject.innerHTML = `<span class="modal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="/icons/sprites.svg#icon-mail"/></svg></span><span>${escapeHtml(email.subject || '(无主题)')}</span>`;
+
     const code = email.verification_code || extractCode(email.content || email.html_content || '');
-    
+
+    let metaHtml = `<div class="email-meta-inline">`;
+    if (email.sender) metaHtml += `<span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="/icons/sprites.svg#icon-user"/></svg> 发件人：${escapeHtml(email.sender)}</span>`;
+    // 展示收件人地址（别名地址）
+    if (email.to_addrs) metaHtml += `<span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="/icons/sprites.svg#icon-mail"/></svg> 收件人：${escapeHtml(email.to_addrs)}</span>`;
+    if (email.received_at) {
+      const d = new Date((email.received_at.includes('T') ? email.received_at : email.received_at.replace(' ', 'T')) + 'Z');
+      const timeStr = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
+      metaHtml += `<span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="/icons/sprites.svg#icon-clock"/></svg> ${timeStr}</span>`;
+    }
+    if (email.download) metaHtml += `<span><a href="${email.download}" download style="color:var(--primary);text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="/icons/sprites.svg#icon-download"/></svg> 下载 EML</a></span>`;
+    metaHtml += `</div>`;
+
+    let codeHtml = '';
     if (code) {
-      contentHtml += `
-        <div class="verification-code-box" style="margin-bottom:16px;padding:12px;background:var(--success-light);border-radius:8px;display:flex;align-items:center;gap:12px">
-          <span style="font-size:20px">🔑</span>
-          <span style="font-size:18px;font-weight:600;font-family:monospace;cursor:pointer" onclick="navigator.clipboard.writeText('${code}').then(()=>showToast('验证码已复制','success'))">${code}</span>
-          <span style="font-size:12px;color:var(--text-muted)">点击复制</span>
-        </div>`;
+      codeHtml = `<div class="code-highlight" onclick="navigator.clipboard.writeText('${escapeAttr(code)}').then(()=>showToast('验证码已复制','success'))" title="点击复制" style="cursor:pointer">${escapeHtml(code)}</div>`;
     }
-    
+
+    let bodyHtml = '';
     if (email.html_content) {
-      contentHtml += `<iframe class="email-frame" srcdoc="${escapeAttr(email.html_content)}" style="width:100%;min-height:400px;border:none"></iframe>`;
+      bodyHtml = `<div class="email-content-area"><iframe srcdoc="${escapeAttr(email.html_content)}" sandbox="allow-same-origin allow-popups" style="width:100%;min-height:400px;border:none;display:block"></iframe></div>`;
     } else {
-      contentHtml += `<pre style="white-space:pre-wrap;word-break:break-word">${escapeHtml(email.content || '')}</pre>`;
+      bodyHtml = `<div class="email-content-area"><pre class="email-content-text" style="white-space:pre-wrap;word-break:break-word">${escapeHtml(email.content || '')}</pre></div>`;
     }
-    
-    modalContent.innerHTML = contentHtml;
+
+    modalContent.innerHTML = `<div class="email-detail-container">${metaHtml}${codeHtml}${bodyHtml}</div>`;
     modal.classList.add('show');
   } catch(e) {
     showToast(e.message || '加载失败', 'error');

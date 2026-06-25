@@ -31,76 +31,118 @@ export function renderEmailDetail(email) {
     content = `<pre style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(email.content || '')}</pre>`;
   }
   
+  let metaHtml = `<div class="email-meta-inline">`;
+  metaHtml += `<span>发件人：${sender}</span>`;
+  if (to) metaHtml += `<span>收件人：${to}</span>`;
+  metaHtml += `<span>${receivedAt}</span>`;
+  metaHtml += `</div>`;
+
+  let codeHtml = '';
+  if (verificationCode) {
+    codeHtml = `<div class="code-highlight" onclick="navigator.clipboard.writeText('${escapeAttr(verificationCode)}')" title="点击复制" style="cursor:pointer">${escapeHtml(verificationCode)}</div>`;
+  }
+
   return `
-    <div class="email-detail">
-      <div class="detail-header">
-        <h2 class="detail-subject">${subject}</h2>
-        <div class="detail-meta">
-          <div class="meta-row">
-            <span class="meta-label">发件人：</span>
-            <span class="meta-value">${sender}</span>
-          </div>
-          ${to ? `
-            <div class="meta-row">
-              <span class="meta-label">收件人：</span>
-              <span class="meta-value">${to}</span>
-            </div>
-          ` : ''}
-          <div class="meta-row">
-            <span class="meta-label">时间：</span>
-            <span class="meta-value">${receivedAt}</span>
-          </div>
-          ${verificationCode ? `
-            <div class="meta-row verification-code">
-              <span class="meta-label">验证码：</span>
-              <span class="meta-value code-value" title="点击复制">${escapeHtml(verificationCode)}</span>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-      <div class="detail-body">
-        ${content}
-      </div>
+    <div class="email-detail-container">
+      <h2 style="font-size:18px;font-weight:700;color:var(--text);word-break:break-all;padding:0 4px">${subject}</h2>
+      ${metaHtml}
+      ${codeHtml}
+      ${content}
     </div>
   `;
 }
 
 /**
- * 简单的 HTML 清理（移除危险标签和属性）
+ * 使用白名单方式安全净化 HTML，替换移除固定危险标签的简单实现。
  * @param {string} html - 原始 HTML
  * @returns {string}
  */
 export function sanitizeHtml(html) {
   if (!html) return '';
-  
-  // 创建一个临时容器
+
+  // 白名单标签
+  const ALLOWED_TAGS = new Set([
+    'a', 'abbr', 'b', 'blockquote', 'br', 'caption', 'cite', 'code', 'col',
+    'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt', 'em',
+    'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
+    'i', 'img', 'ins', 'kbd', 'li', 'mark', 'ol', 'p', 'pre', 'q',
+    's', 'samp', 'small', 'span', 'strong', 'sub', 'summary', 'sup',
+    'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time', 'tr', 'u',
+    'ul', 'var', 'wbr'
+  ]);
+
+  // 白名单属性
+  const ALLOWED_ATTRS = new Set([
+    'align', 'bgcolor', 'border', 'cellpadding', 'cellspacing',
+    'cite', 'colspan', 'datetime', 'headers', 'height', 'href',
+    'hreflang', 'lang', 'rel', 'rowspan', 'scope', 'src',
+    'style', 'target', 'title', 'valign', 'width'
+  ]);
+
+  // URI 协议白名单
+  const SAFE_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:'];
+
+  // 禁止的 CSS 属性模式
+  const DANGEROUS_CSS = /(expression|javascript|vbscript|url\s*\()/i;
+
   const temp = document.createElement('div');
   temp.innerHTML = html;
-  
-  // 移除危险标签
-  const dangerousTags = ['script', 'style', 'iframe', 'object', 'embed', 'form'];
-  dangerousTags.forEach(tag => {
-    const elements = temp.querySelectorAll(tag);
-    elements.forEach(el => el.remove());
-  });
-  
-  // 移除危险属性
-  const dangerousAttrs = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus', 'onblur'];
-  const allElements = temp.querySelectorAll('*');
-  allElements.forEach(el => {
-    dangerousAttrs.forEach(attr => {
-      el.removeAttribute(attr);
-    });
-    
-    // 处理 href 和 src 中的 javascript:
-    if (el.hasAttribute('href') && el.getAttribute('href').toLowerCase().startsWith('javascript:')) {
-      el.removeAttribute('href');
+
+  // 递归清理节点
+  function sanitizeNode(node) {
+    if (node.nodeType === 1) { // Element node
+      const tag = node.tagName.toLowerCase();
+
+      if (!ALLOWED_TAGS.has(tag)) {
+        // 移除不允许的标签，保留其文本内容
+        const fragment = document.createDocumentFragment();
+        while (node.firstChild) {
+          fragment.appendChild(node.firstChild);
+        }
+        node.parentNode.replaceChild(fragment, node);
+        return;
+      }
+
+      // 处理 href/src 属性
+      for (const attr of ['href', 'src']) {
+        if (node.hasAttribute(attr)) {
+          const val = node.getAttribute(attr).trim().toLowerCase();
+          if (!SAFE_PROTOCOLS.some(p => val.startsWith(p)) && !val.startsWith('/') && !val.startsWith('#') && !val.startsWith('data:image/')) {
+            node.removeAttribute(attr);
+          }
+        }
+      }
+
+      // 移除不在白名单中的属性
+      const attrsToRemove = [];
+      for (let i = 0; i < node.attributes.length; i++) {
+        const attr = node.attributes[i].name;
+        if (!ALLOWED_ATTRS.has(attr)) {
+          attrsToRemove.push(attr);
+        }
+      }
+      for (const attr of attrsToRemove) {
+        node.removeAttribute(attr);
+      }
+
+      // 净化 style 属性
+      if (node.hasAttribute('style')) {
+        const style = node.getAttribute('style');
+        if (DANGEROUS_CSS.test(style)) {
+          node.removeAttribute('style');
+        }
+      }
+
+      // 递归处理子节点
+      for (let i = node.childNodes.length - 1; i >= 0; i--) {
+        sanitizeNode(node.childNodes[i]);
+      }
+    } else if (node.nodeType === 3) { // Text node
+      // 文本节点安全，无需处理
     }
-    if (el.hasAttribute('src') && el.getAttribute('src').toLowerCase().startsWith('javascript:')) {
-      el.removeAttribute('src');
-    }
-  });
-  
+  }
+
+  sanitizeNode(temp);
   return temp.innerHTML;
 }
 
@@ -130,16 +172,11 @@ export function renderEmailModal(email) {
       <h3 class="modal-title">${subject}</h3>
       <button class="modal-close" data-action="close">&times;</button>
     </div>
-    <div class="modal-meta">
-      <p><strong>发件人：</strong>${sender}</p>
-      ${to ? `<p><strong>收件人：</strong>${to}</p>` : ''}
-      <p><strong>时间：</strong>${receivedAt}</p>
-      ${verificationCode ? `
-        <p class="verification-code">
-          <strong>验证码：</strong>
-          <span class="code-value" data-code="${escapeAttr(verificationCode)}" title="点击复制">${escapeHtml(verificationCode)}</span>
-        </p>
-      ` : ''}
+    <div class="email-meta-inline">
+      <span>发件人：${sender}</span>
+      ${to ? `<span>收件人：${to}</span>` : ''}
+      <span>${receivedAt}</span>
+      ${verificationCode ? `<span class="code-highlight" data-code="${escapeAttr(verificationCode)}" title="点击复制" style="cursor:pointer">验证码：${escapeHtml(verificationCode)}</span>` : ''}
     </div>
     <div class="modal-body">
       ${content}

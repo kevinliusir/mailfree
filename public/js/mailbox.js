@@ -55,22 +55,8 @@ const els = {
   totalCount: document.getElementById('total-count')
 };
 
-// 动态导入 mock API（用于 guest 模式）
-let mockApiModule = null;
-async function getMockApi() {
-  if (!mockApiModule) {
-    mockApiModule = await import('./modules/app/mock-api.js');
-  }
-  return mockApiModule.mockApi;
-}
-
 // API 请求
 async function api(path, options = {}) {
-  // Guest 模式使用 mock API
-  if (window.__GUEST_MODE__) {
-    const mockApi = await getMockApi();
-    return mockApi(path, options);
-  }
   const r = await fetch(path, { ...options, headers: { 'Cache-Control': 'no-cache', ...options.headers }});
   if (r.status === 401) { redirectToLogin('请先登录'); throw new Error('unauthorized'); }
   return r;

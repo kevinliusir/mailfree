@@ -475,36 +475,8 @@ els.passwordNewInput?.addEventListener('keydown', (e) => {
   }
 });
 
-// 初始化 guest 模式
-async function initGuestMode() {
-  // 初始化全局变量
-  if (typeof window.__GUEST_MODE__ === 'undefined') {
-    window.__GUEST_MODE__ = false;
-  }
-  
-  try {
-    const sessionResp = await fetch('/api/session');
-    if (sessionResp.ok) {
-      const session = await sessionResp.json();
-      if (session.role === 'guest' || session.username === 'guest') {
-        window.__GUEST_MODE__ = true;
-        // 初始化 mock 数据
-        const { MOCK_STATE, buildMockMailboxes } = await import('./modules/app/mock-api.js');
-        if (!MOCK_STATE.mailboxes.length) {
-          MOCK_STATE.mailboxes = buildMockMailboxes(6, 2, MOCK_STATE.domains);
-        }
-      }
-    }
-  } catch(e) {
-    console.warn('Session check failed:', e);
-  }
-}
-
 // 初始化
 (async () => {
-  // 先检查 guest 模式
-  await initGuestMode();
-  
   // 设置初始视图模式
   els.viewGrid?.classList.toggle('active', currentView === 'grid');
   els.viewList?.classList.toggle('active', currentView === 'list');

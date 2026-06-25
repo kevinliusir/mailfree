@@ -18,6 +18,28 @@ import {
  * @returns {Promise<number>} 邮箱ID
  * @throws {Error} 当邮箱地址无效时抛出异常
  */
+function parseTotpCodes(s) { try { return JSON.parse(s || '[]') || []; } catch (_) { return []; } }
+
+/** 读取邮箱 2FA 配置（by id） */
+export async function getMailboxTotp(db, mailboxId) {
+  const row = await db.prepare('SELECT totp_secret, totp_enabled, totp_backup_codes FROM mailboxes WHERE id = ?')
+    .bind(Number(mailboxId)).first();
+  if (!row) return null;
+  return { secret: row.totp_secret || '', enabled: !!row.totp_enabled, backupCodes: parseTotpCodes(row.totp_backup_codes) };
+}
+
+/** 写入/更新邮箱 2FA 配置 */
+export async function setMailboxTotp(db, mailboxId, { secret, enabled, backupCodes }) {
+  await db.prepare('UPDATE mailboxes SET totp_secret = ?, totp_enabled = ?, totp_backup_codes = ? WHERE id = ?')
+    .bind(secret || null, enabled ? 1 : 0, JSON.stringify(backupCodes || []), Number(mailboxId)).run();
+}
+
+/** 清空邮箱 2FA（关闭/重置） */
+export async function clearMailboxTotp(db, mailboxId) {
+  await db.prepare('UPDATE mailboxes SET totp_secret = NULL, totp_enabled = 0, totp_backup_codes = NULL WHERE id = ?')
+    .bind(Number(mailboxId)).run();
+}
+
 export async function getOrCreateMailboxId(db, address) {
   const normalized = String(address || '').trim().toLowerCase();
   if (!normalized) throw new Error('无效的邮箱地址');

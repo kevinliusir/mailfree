@@ -172,16 +172,13 @@ export function applySessionUI(session, elements = {}) {
       } else if (session.role === 'user') {
         badge.classList.add('role-user');
         badge.textContent = `用户：${session.username || ''}`;
-      } else if (session.role === 'guest') {
-        badge.classList.add('role-user');
-        badge.textContent = '演示模式';
       }
     }
-    
+
     const adminLink = document.getElementById('admin');
     const allMailboxesLink = document.getElementById('all-mailboxes');
-    
-    if (session && (session.strictAdmin || session.role === 'guest')) {
+
+    if (session && session.strictAdmin) {
       if (adminLink) adminLink.style.display = 'inline-flex';
       if (allMailboxesLink) allMailboxesLink.style.display = 'inline-flex';
     } else {

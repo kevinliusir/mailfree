@@ -3,10 +3,10 @@
  * @module api/mailboxes
  */
 
-import { getJwtPayload, isStrictAdmin, errorResponse } from './helpers.js';
+import { getJwtPayload, isStrictAdmin, getMailboxAccess, errorResponse } from './helpers.js';
 import { buildMockMailboxes, MOCK_DOMAINS } from './mock.js';
 import { extractEmail, generateRandomId } from '../utils/common.js';
-import { getCachedUserQuota, getCachedSystemStat } from '../utils/cache.js';
+import { getCachedUserQuota, getCachedSystemStat, invalidateSystemStatCache } from '../utils/cache.js';
 import {
   getOrCreateMailboxId,
   toggleMailboxPin,
@@ -132,6 +132,8 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
       }
       
       const row = results[0];
+      const access = await getMailboxAccess(db, request, options, { mailboxId: row.id });
+      if (!access.allowed) return errorResponse('Forbidden', 403);
       return Response.json({
         id: row.id,
         address: row.address,
@@ -154,7 +156,7 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
       return Response.json({ limit: 999, used: 2, remaining: 997 });
     }
     
-    if (isStrictAdmin(request, options) || role === 'admin') {
+    if (isStrictAdmin(request, options)) {
       const totalMailboxes = await getCachedSystemStat(db, 'total_mailboxes', async () => {
         return await getTotalMailboxCount(db);
       });
@@ -241,6 +243,7 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
         } else {
           const uname = String(options?.adminName || 'admin').toLowerCase();
           await db.prepare("INSERT INTO users (username, role, can_send, mailbox_limit) VALUES (?, 'admin', 1, 9999)").bind(uname).run();
+          invalidateSystemStatCache('user_stats');
           const again = await db.prepare('SELECT id FROM users WHERE username = ?').bind(uname).all();
           uid = Number(again?.results?.[0]?.id || 0);
         }
@@ -326,14 +329,19 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
         const adminBindParams = [uid, ...bindParams];
         const adminCountBindParams = [uid, ...countBindParams];
         
-        // 获取总数
-        const countResult = await db.prepare(`
-          SELECT COUNT(*) as total
-          FROM mailboxes m
-          LEFT JOIN user_mailboxes um ON m.id = um.mailbox_id AND um.user_id = ?
-          ${whereClause}
-        `).bind(...adminCountBindParams).first();
-        const total = countResult?.total || 0;
+        // 获取总数 - 无过滤条件时使用缓存避免全表扫描
+        let total;
+        if (whereConditions.length === 0) {
+          total = await getTotalMailboxCount(db);
+        } else {
+          const countResult = await db.prepare(`
+            SELECT COUNT(*) as total
+            FROM mailboxes m
+            LEFT JOIN user_mailboxes um ON m.id = um.mailbox_id AND um.user_id = ?
+            ${whereClause}
+          `).bind(...adminCountBindParams).first();
+          total = countResult?.total || 0;
+        }
         
         const { results } = await db.prepare(`
           SELECT m.id, m.address, m.created_at, COALESCE(um.is_pinned, 0) AS is_pinned,
@@ -349,13 +357,18 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
         return Response.json({ list: results || [], total });
       } else if (strictAdmin) {
         // 严格管理员但没有 uid（不应该发生，但作为兜底）
-        // 获取总数
-        const countResult = await db.prepare(`
-          SELECT COUNT(*) as total
-          FROM mailboxes m
-          ${whereClause}
-        `).bind(...countBindParams).first();
-        const total = countResult?.total || 0;
+        // 获取总数 - 无过滤条件时使用缓存避免全表扫描
+        let total;
+        if (whereConditions.length === 0) {
+          total = await getTotalMailboxCount(db);
+        } else {
+          const countResult = await db.prepare(`
+            SELECT COUNT(*) as total
+            FROM mailboxes m
+            ${whereClause}
+          `).bind(...countBindParams).first();
+          total = countResult?.total || 0;
+        }
         
         const { results } = await db.prepare(`
           SELECT m.id, m.address, m.created_at, 0 AS is_pinned,
@@ -400,8 +413,20 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
   // 切换邮箱置顶状态
   if (path === '/api/mailboxes/pin' && request.method === 'POST') {
     if (isMock) return errorResponse('演示模式不可操作', 403);
-    const address = url.searchParams.get('address');
+    let address = url.searchParams.get('address');
+    if (!address) {
+      try {
+        const ct = request.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          address = (await request.json())?.address;
+        } else if (ct.includes('multipart/form-data') || ct.includes('application/x-www-form-urlencoded')) {
+          const fd = await request.formData();
+          address = fd.get('address');
+        }
+      } catch (_) {}
+    }
     if (!address) return errorResponse('缺少 address 参数', 400);
+    address = String(address).trim().toLowerCase();
     const payload = getJwtPayload(request, options);
     let uid = Number(payload?.userId || 0);
     
@@ -414,6 +439,7 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
         } else {
           const uname = String(options?.adminName || 'admin').toLowerCase();
           await db.prepare("INSERT INTO users (username, role, can_send, mailbox_limit) VALUES (?, 'admin', 1, 9999)").bind(uname).run();
+          invalidateSystemStatCache('user_stats');
           const again = await db.prepare('SELECT id FROM users WHERE username = ?').bind(uname).all();
           uid = Number(again?.results?.[0]?.id || 0);
         }
@@ -421,6 +447,11 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
     }
     if (!uid) return errorResponse('未登录', 401);
     try {
+      if (!isStrictAdmin(request, options)) {
+        const access = await getMailboxAccess(db, request, options, { address });
+        if (!access.exists) return errorResponse('Not Found', 404);
+        if (!access.allowed) return errorResponse('Forbidden', 403);
+      }
       const result = await toggleMailboxPin(db, address, uid);
       return Response.json({ success: true, ...result });
     } catch (e) {

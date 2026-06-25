@@ -6,9 +6,61 @@
 import {
   getCachedUserQuota,
   invalidateUserQuotaCache,
-  invalidateSystemStatCache
+  invalidateSystemStatCache,
+  getCachedSystemStat
 } from '../utils/cache.js';
 import { getOrCreateMailboxId, getMailboxIdByAddress } from './mailboxes.js';
+
+/**
+ * 获取用户聚合统计（总数、管理员数、可发件数），带缓存
+ * @param {object} db - 数据库连接对象
+ * @returns {Promise<{total:number, admin_count:number, active_count:number}>} 用户聚合统计
+ */
+function parseTotpCodes(s) { try { return JSON.parse(s || '[]') || []; } catch (_) { return []; } }
+
+/** 按用户名读取 2FA 配置（登录第一步用） */
+export async function getUserTotpByUsername(db, username) {
+  const row = await db.prepare('SELECT id, totp_secret, totp_enabled, totp_backup_codes FROM users WHERE username = ?')
+    .bind(String(username || '').toLowerCase()).first();
+  if (!row) return null;
+  return { userId: row.id, secret: row.totp_secret || '', enabled: !!row.totp_enabled, backupCodes: parseTotpCodes(row.totp_backup_codes) };
+}
+
+/** 按 userId 读取 2FA 配置 */
+export async function getUserTotp(db, userId) {
+  const row = await db.prepare('SELECT totp_secret, totp_enabled, totp_backup_codes FROM users WHERE id = ?')
+    .bind(Number(userId)).first();
+  if (!row) return null;
+  return { secret: row.totp_secret || '', enabled: !!row.totp_enabled, backupCodes: parseTotpCodes(row.totp_backup_codes) };
+}
+
+/** 写入/更新 2FA 配置 */
+export async function setUserTotp(db, userId, { secret, enabled, backupCodes }) {
+  await db.prepare('UPDATE users SET totp_secret = ?, totp_enabled = ?, totp_backup_codes = ? WHERE id = ?')
+    .bind(secret || null, enabled ? 1 : 0, JSON.stringify(backupCodes || []), Number(userId)).run();
+}
+
+/** 清空 2FA（关闭/重置） */
+export async function clearUserTotp(db, userId) {
+  await db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_backup_codes = NULL WHERE id = ?')
+    .bind(Number(userId)).run();
+}
+
+export async function getUserStats(db) {
+  return await getCachedSystemStat(db, 'user_stats', async (db) => {
+    const row = await db.prepare(
+      `SELECT COUNT(1) AS total,
+              SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admin_count,
+              SUM(CASE WHEN can_send = 1 THEN 1 ELSE 0 END) AS active_count
+       FROM users`
+    ).first();
+    return {
+      total: row?.total || 0,
+      admin_count: row?.admin_count || 0,
+      active_count: row?.active_count || 0
+    };
+  });
+}
 
 /**
  * 创建新用户
@@ -28,6 +80,8 @@ export async function createUser(db, { username, passwordHash = null, role = 'us
     .bind(uname, passwordHash, role, Math.max(0, Number(mailboxLimit || 10))).run();
   const res = await db.prepare('SELECT id, username, role, mailbox_limit, created_at FROM users WHERE username = ? LIMIT 1')
     .bind(uname).all();
+  // 新增用户会改变用户总数/管理员数，失效聚合统计缓存
+  invalidateSystemStatCache('user_stats');
   return res?.results?.[0];
 }
 
@@ -60,6 +114,10 @@ export async function updateUser(db, userId, fields) {
   if ('can_send' in fields) {
     invalidateSystemStatCache(`user_can_send_${userId}`);
   }
+  // 角色或可发件状态变化会影响用户聚合统计
+  if ('role' in fields || 'can_send' in fields) {
+    invalidateSystemStatCache('user_stats');
+  }
 }
 
 /**
@@ -71,6 +129,8 @@ export async function updateUser(db, userId, fields) {
 export async function deleteUser(db, userId) {
   // 关联表启用 ON DELETE CASCADE
   await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+  // 删除用户会改变用户总数/管理员数，失效聚合统计缓存
+  invalidateSystemStatCache('user_stats');
 }
 
 /**

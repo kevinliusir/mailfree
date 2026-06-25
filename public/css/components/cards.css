@@ -19,8 +19,6 @@
 /* 毛玻璃卡片 */
 .card-glass {
   background: var(--card-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-glass);
 }
 
@@ -105,8 +103,6 @@
 /* 邮箱卡片 */
 .mailbox-card {
   background: var(--card-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
